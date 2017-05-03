@@ -5,25 +5,20 @@
  */
 
 import * as p from 'path';
-import {writeFileSync} from 'fs';
-import {sync as mkdirpSync} from 'mkdirp';
+import { writeFileSync } from 'fs';
+import { sync as mkdirpSync } from 'mkdirp';
 import printICUMessage from './print-icu-message';
 
-const COMPONENT_NAMES = [
-    'FormattedMessage',
-    'FormattedHTMLMessage',
-];
+const COMPONENT_NAMES = ['FormattedMessage', 'FormattedHTMLMessage'];
 
-const FUNCTION_NAMES = [
-    'defineMessages',
-];
+const FUNCTION_NAMES = ['defineMessages'];
 
 const DESCRIPTOR_PROPS = new Set(['id', 'description', 'defaultMessage']);
 
 const EXTRACTED = Symbol('ReactIntlExtracted');
-const MESSAGES  = Symbol('ReactIntlMessages');
+const MESSAGES = Symbol('ReactIntlMessages');
 
-export default function ({types: t}) {
+export default function({ types: t }) {
     function getModuleSourceName(opts) {
         return opts.moduleSourceName || 'react-intl';
     }
@@ -117,6 +112,10 @@ export default function ({types: t}) {
 
     function storeMessage({id, description, defaultMessage}, path, state) {
         const {file, opts} = state;
+
+        if (!defaultMessage && opts.allowMissingDefaultMessages) {
+            defaultMessage = id;
+        }
 
         if (!(id && defaultMessage)) {
             throw path.buildCodeFrameError(
@@ -249,8 +248,9 @@ export default function ({types: t}) {
                     // write `<FormattedMessage {...descriptor} />` or
                     // `<FormattedMessage id={dynamicId} />`, because it will be
                     // skipped here and extracted elsewhere. The descriptor will
-                    // be extracted only if a `defaultMessage` prop exists.
-                    if (descriptor.defaultMessage) {
+                    // be extracted only if a `defaultMessage` prop exists,
+                    // unless `allowMissingDefaultMessages` is true
+                    if (opts.allowMissingDefaultMessages || descriptor.defaultMessage) {
                         // Evaluate the Message Descriptor values in a JSX
                         // context, then store it.
                         descriptor = evaluateMessageDescriptor(descriptor, {
@@ -290,6 +290,7 @@ export default function ({types: t}) {
                 }
 
                 function processMessageObject(messageObj) {
+                    const {opts} = state;
                     assertObjectExpression(messageObj);
 
                     if (wasExtracted(messageObj)) {
@@ -308,6 +309,10 @@ export default function ({types: t}) {
                     // Evaluate the Message Descriptor values, then store it.
                     descriptor = evaluateMessageDescriptor(descriptor);
                     storeMessage(descriptor, messageObj, state);
+
+                    if (opts.allowMissingDefaultMessages && !descriptor.defaultMessage) {
+                        descriptor.defaultMessage = descriptor.id;
+                    }
 
                     // Remove description since it's not used at runtime.
                     messageObj.replaceWith(t.objectExpression([
